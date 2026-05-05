@@ -1,0 +1,30 @@
+{
+  "check_interval": 30,
+  "state_file": ".cronwatch_state.json",
+  "alert": {
+    "webhook_url": "https://hooks.example.com/services/YOUR/WEBHOOK/URL",
+    "email_to": "ops@example.com",
+    "email_from": "cronwatch@example.com",
+    "smtp_host": "smtp.example.com",
+    "smtp_port": 587
+  },
+  "jobs": [
+    {
+      "name": "daily-backup",
+      "schedule": "0 2 * * *",
+      "grace_period": 300,
+      "timeout": 3600
+    },
+    {
+      "name": "hourly-sync",
+      "schedule": "0 * * * *",
+      "grace_period": 120
+    },
+    {
+      "name": "weekly-report",
+      "schedule": "0 9 * * 1",
+      "grace_period": 600,
+      "timeout": 1800
+    }
+  ]
+}
