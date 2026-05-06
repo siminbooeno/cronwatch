@@ -1,75 +1,75 @@
-"""Runner module: executes a shell command and records success/failure in state."""
+"""Run a cron job command and record its outcome in state and history."""
+
+from __future__ import annotations
 
 import subprocess
 import time
-import logging
 from typing import Optional
 
 from cronwatch.config import JobConfig
-from cronwatch.state import record_success, record_failure
+from cronwatch.history import append_execution
+from cronwatch.state import load_store, record_failure, record_success, save_store
 
-logger = logging.getLogger(__name__)
 
+def run_job(
+    job: JobConfig,
+    state_dir: str,
+    alert_config=None,
+) -> bool:
+    """Execute *job* and persist success/failure state.
 
-def run_job(job: JobConfig, state_dir: str = ".cronwatch") -> bool:
+    Returns True on success, False on failure.
     """
-    Execute the command associated with *job*.
+    store = load_store(state_dir)
+    timeout: Optional[int] = job.timeout
 
-    Returns True on success (exit code 0), False otherwise.
-    Respects job.timeout_seconds when set.
-    Records the outcome in the persistent state store.
-    """
-    if not job.command:
-        logger.warning("Job '%s' has no command configured – skipping.", job.name)
-        return False
-
-    timeout: Optional[float] = (
-        float(job.timeout_seconds) if job.timeout_seconds is not None else None
-    )
-
-    logger.info("Running job '%s': %s", job.name, job.command)
     start = time.monotonic()
-
     try:
         result = subprocess.run(
             job.command,
             shell=True,
+            timeout=timeout,
             capture_output=True,
             text=True,
-            timeout=timeout,
         )
-        elapsed = time.monotonic() - start
-
-        if result.returncode == 0:
-            logger.info(
-                "Job '%s' succeeded in %.2fs.", job.name, elapsed
-            )
-            record_success(job.name, state_dir=state_dir)
-            return True
-        else:
-            logger.error(
-                "Job '%s' failed (exit %d) after %.2fs.\nstdout: %s\nstderr: %s",
-                job.name,
-                result.returncode,
-                elapsed,
-                result.stdout.strip(),
-                result.stderr.strip(),
-            )
-            record_failure(job.name, state_dir=state_dir)
-            return False
-
+        duration = time.monotonic() - start
+        success = result.returncode == 0
     except subprocess.TimeoutExpired:
-        elapsed = time.monotonic() - start
-        logger.error(
-            "Job '%s' timed out after %.2fs (limit: %ss).",
-            job.name,
-            elapsed,
-            job.timeout_seconds,
-        )
-        record_failure(job.name, state_dir=state_dir)
-        return False
+        duration = time.monotonic() - start
+        success = False
+        result = None
 
-    except Exception as exc:  # pragma: no cover
-        logger.exception("Unexpected error running job '%s': %s", job.name, exc)
-        record_failure(job.name, state_dir=state_dir)
-        return False
+    exit_code = result.returncode if result is not None else None
+    note: Optional[str] = None
+    if result is not None and not success and result.stderr:
+        note = result.stderr.strip()[:200]
+    elif result is None:
+        note = f"timed out after {timeout}s"
+
+    if success:
+        record_success(store, job.name)
+    else:
+        record_failure(store, job.name)
+
+    save_store(state_dir, store)
+
+    append_execution(
+        state_dir,
+        job.name,
+        success=success,
+        exit_code=exit_code,
+        duration_seconds=round(duration, 3),
+        note=note,
+    )
+
+    if not success and alert_config is not None:
+        from cronwatch.alerts import dispatch_alert
+
+        dispatch_alert(
+            alert_config,
+            job_name=job.name,
+            reason="failure",
+            detail=note or f"exited with code {exit_code}",
+        )
+
+    return success
