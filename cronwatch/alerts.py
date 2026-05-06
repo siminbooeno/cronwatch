@@ -17,6 +17,11 @@ def _build_message(job_id: str, status: str, detail: str = "") -> str:
 
 
 def send_webhook(url: str, job_id: str, status: str, detail: str = "") -> bool:
+    """Send a JSON POST request to a webhook URL.
+
+    Returns True if the server responded with a 2xx/3xx status code,
+    False on any network error or HTTP error (4xx/5xx).
+    """
     payload = json.dumps(
         {"job_id": job_id, "status": status, "detail": detail}
     ).encode()
@@ -44,6 +49,11 @@ def send_email(
     username: Optional[str] = None,
     password: Optional[str] = None,
 ) -> bool:
+    """Send an alert email via SMTP.
+
+    Attempts STARTTLS and login when *username* and *password* are provided.
+    Returns True on success, False if any SMTP or network error occurs.
+    """
     subject = f"[cronwatch] Job '{job_id}' {status}"
     body = _build_message(job_id, status, detail)
     msg = MIMEText(body)
@@ -57,7 +67,10 @@ def send_email(
                 server.login(username, password)
             server.sendmail(sender, [recipient], msg.as_string())
         return True
-    except Exception:
+    except smtplib.SMTPException:
+        return False
+    except OSError:
+        # Covers socket/connection errors (e.g. refused connection, timeout).
         return False
 
 
@@ -67,6 +80,7 @@ def dispatch_alert(
     status: str,
     detail: str = "",
 ) -> None:
+    """Dispatch an alert through all configured channels (webhook and/or email)."""
     if alert.webhook_url:
         send_webhook(alert.webhook_url, job_id, status, detail)
     if alert.email_recipient and alert.smtp_host:
