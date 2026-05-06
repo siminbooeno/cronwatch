@@ -31,23 +31,32 @@ class CronwatchConfig:
     state_file: str = ".cronwatch_state.json"
 
 
+def _parse_job(j: dict) -> JobConfig:
+    """Parse a single job entry from config data, with validation."""
+    if "name" not in j:
+        raise ValueError("Job entry is missing required field 'name'")
+    if "schedule" not in j:
+        raise ValueError(f"Job '{j.get('name')}' is missing required field 'schedule'")
+    return JobConfig(
+        name=j["name"],
+        schedule=j["schedule"],
+        grace_period=j.get("grace_period", 60),
+        timeout=j.get("timeout"),
+    )
+
+
 def load_config(path: str = "cronwatch.json") -> CronwatchConfig:
     """Load configuration from a JSON file."""
     if not os.path.exists(path):
         raise FileNotFoundError(f"Config file not found: {path}")
 
     with open(path, "r") as f:
-        data = json.load(f)
+        try:
+            data = json.load(f)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON in config file '{path}': {e}") from e
 
-    jobs = [
-        JobConfig(
-            name=j["name"],
-            schedule=j["schedule"],
-            grace_period=j.get("grace_period", 60),
-            timeout=j.get("timeout"),
-        )
-        for j in data.get("jobs", [])
-    ]
+    jobs = [_parse_job(j) for j in data.get("jobs", [])]
 
     alert_data = data.get("alert", {})
     alert = AlertConfig(
