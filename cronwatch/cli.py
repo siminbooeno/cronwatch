@@ -1,78 +1,103 @@
-"""CLI entry-point for cronwatch.
+"""CLI entry-point for cronwatch."""
 
-Usage:
-    cronwatch run  --config <path> [--state-dir <dir>]
-    cronwatch check --config <path> [--state-dir <dir>]
-"""
+from __future__ import annotations
 
 import argparse
-import logging
 import sys
+from pathlib import Path
 
 from cronwatch.config import load_config
 from cronwatch.runner import run_job
 from cronwatch.checker import check_jobs
 from cronwatch.alerts import dispatch_alert
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s – %(message)s",
-)
-logger = logging.getLogger(__name__)
+from cronwatch.retention import prune_all_history, prune_state
 
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="cronwatch",
-        description="Lightweight cron job monitor.",
+        description="Lightweight cron job monitor",
     )
-    parser.add_argument("-c", "--config", required=True, help="Path to config JSON file.")
-    parser.add_argument(
-        "--state-dir", default=".cronwatch", help="Directory for state files (default: .cronwatch)."
+    parser.add_argument("--config", default="cronwatch.json", help="Config file path")
+    parser.add_argument("--state-dir", default=".cronwatch/state", help="State directory")
+    parser.add_argument("--history-dir", default=".cronwatch/history", help="History directory")
+
+    sub = parser.add_subparsers(dest="command")
+
+    run_p = sub.add_parser("run", help="Run a named job and record outcome")
+    run_p.add_argument("job", help="Job name")
+
+    sub.add_parser("check", help="Check for overdue jobs and dispatch alerts")
+
+    prune_p = sub.add_parser("prune", help="Prune old history and stale state")
+    prune_p.add_argument(
+        "--max-age-days", type=int, default=30, help="Retention window in days"
     )
-
-    sub = parser.add_subparsers(dest="command", required=True)
-
-    sub.add_parser("run", help="Execute all configured jobs and record outcomes.")
-    sub.add_parser("check", help="Check for missed/overdue jobs and dispatch alerts.")
 
     return parser
 
 
-def cmd_run(config_path: str, state_dir: str) -> int:
-    cfg = load_config(config_path)
-    exit_code = 0
-    for job in cfg.jobs:
-        ok = run_job(job, state_dir=state_dir)
-        if not ok:
-            exit_code = 1
-            if cfg.alert:
-                dispatch_alert(
-                    cfg.alert,
-                    subject=f"[cronwatch] Job '{job.name}' FAILED",
-                    body=f"Job '{job.name}' exited with a non-zero status or timed out.",
-                )
-    return exit_code
+def cmd_run(args: argparse.Namespace) -> int:
+    cfg = load_config(args.config)
+    job_cfg = next((j for j in cfg.jobs if j.name == args.job), None)
+    if job_cfg is None:
+        print(f"cronwatch: unknown job '{args.job}'", file=sys.stderr)
+        return 2
+
+    Path(args.state_dir).mkdir(parents=True, exist_ok=True)
+    Path(args.history_dir).mkdir(parents=True, exist_ok=True)
+
+    ok = run_job(job_cfg, state_dir=args.state_dir, history_dir=args.history_dir)
+    return 0 if ok else 1
 
 
-def cmd_check(config_path: str, state_dir: str) -> int:
-    cfg = load_config(config_path)
-    overdue = check_jobs(cfg.jobs, state_dir=state_dir)
-    if overdue and cfg.alert:
-        for job_name in overdue:
-            dispatch_alert(
-                cfg.alert,
-                subject=f"[cronwatch] Job '{job_name}' is OVERDUE",
-                body=f"Job '{job_name}' has not been seen within its expected schedule.",
-            )
-    return 1 if overdue else 0
+def cmd_check(args: argparse.Namespace) -> int:
+    cfg = load_config(args.config)
+    overdue = check_jobs(cfg.jobs, state_dir=args.state_dir)
+    for job_name in overdue:
+        dispatch_alert(cfg.alert, job_name=job_name, reason="overdue")
+    return 0
 
 
-def main(argv=None) -> None:
+def cmd_prune(args: argparse.Namespace) -> int:
+    cfg = load_config(args.config)
+    job_names = [j.name for j in cfg.jobs]
+
+    history_results = prune_all_history(
+        history_dir=args.history_dir,
+        max_age_days=args.max_age_days,
+        job_names=job_names,
+    )
+    for name, count in history_results.items():
+        if count:
+            print(f"pruned {count} history record(s) for '{name}'")
+
+    removed_states = 0
+    for name in job_names:
+        if prune_state(args.state_dir, args.max_age_days, name):
+            print(f"removed stale state for '{name}'")
+            removed_states += 1
+
+    if not any(history_results.values()) and removed_states == 0:
+        print("nothing to prune")
+
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
     if args.command == "run":
-        sys.exit(cmd_run(args.config, args.state_dir))
-    elif args.command == "check":
-        sys.exit(cmd_check(args.config, args.state_dir))
+        return cmd_run(args)
+    if args.command == "check":
+        return cmd_check(args)
+    if args.command == "prune":
+        return cmd_prune(args)
+
+    parser.print_help()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
