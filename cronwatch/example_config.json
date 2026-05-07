@@ -1,8 +1,11 @@
 {
-  "check_interval": 30,
-  "state_file": ".cronwatch_state.json",
+  "state_dir": "/tmp/cronwatch/state",
+  "history_dir": "/tmp/cronwatch/history",
+  "history_retention_days": 30,
+  "check_interval_seconds": 60,
+  "digest_interval_seconds": 86400,
   "alert": {
-    "webhook_url": "https://hooks.example.com/services/YOUR/WEBHOOK/URL",
+    "webhook_url": "https://hooks.example.com/cronwatch",
     "email_to": "ops@example.com",
     "email_from": "cronwatch@example.com",
     "smtp_host": "smtp.example.com",
@@ -10,21 +13,25 @@
   },
   "jobs": [
     {
-      "name": "daily-backup",
-      "schedule": "0 2 * * *",
-      "grace_period": 300,
-      "timeout": 3600
+      "name": "nightly-backup",
+      "command": "/usr/local/bin/backup.sh",
+      "interval_seconds": 86400,
+      "grace_seconds": 300,
+      "tags": ["backup", "critical"]
     },
     {
       "name": "hourly-sync",
-      "schedule": "0 * * * *",
-      "grace_period": 120
+      "command": "/usr/local/bin/sync.sh",
+      "interval_seconds": 3600,
+      "grace_seconds": 120,
+      "timeout_seconds": 600,
+      "tags": ["sync"]
     },
     {
-      "name": "weekly-report",
-      "schedule": "0 9 * * 1",
-      "grace_period": 600,
-      "timeout": 1800
+      "name": "health-ping",
+      "command": "/usr/local/bin/ping-check.sh",
+      "interval_seconds": 300,
+      "tags": ["monitoring", "critical"]
     }
   ]
 }
