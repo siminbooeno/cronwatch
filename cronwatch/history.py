@@ -75,10 +75,16 @@ def load_history(state_dir: str, job_name: str) -> JobHistory:
     path = _history_path(state_dir, job_name)
     if not path.exists():
         return JobHistory(job_name=job_name)
-    with open(path) as f:
-        data = json.load(f)
-    records = [ExecutionRecord(**r) for r in data.get("records", [])]
-    return JobHistory(job_name=job_name, records=records)
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        records = [ExecutionRecord(**r) for r in data.get("records", [])]
+        return JobHistory(job_name=job_name, records=records)
+    except (json.JSONDecodeError, TypeError, KeyError) as e:
+        # If the history file is corrupt or unreadable, start fresh rather than crashing.
+        import warnings
+        warnings.warn(f"Could not load history for '{job_name}' from {path}: {e}. Starting with empty history.")
+        return JobHistory(job_name=job_name)
 
 
 def save_history(state_dir: str, history: JobHistory) -> None:
