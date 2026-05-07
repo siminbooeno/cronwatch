@@ -58,6 +58,13 @@ class JobHistory:
                 break
         return count
 
+    def average_duration(self) -> Optional[float]:
+        """Return the average duration in seconds across records that have duration data."""
+        durations = [r.duration_seconds for r in self.records if r.duration_seconds is not None]
+        if not durations:
+            return None
+        return sum(durations) / len(durations)
+
 
 def _history_path(state_dir: str, job_name: str) -> Path:
     safe_name = job_name.replace("/", "_").replace(" ", "_")
