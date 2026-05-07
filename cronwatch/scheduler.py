@@ -52,13 +52,18 @@ def run_scheduler(
     while not _STOP:
         overdue = check_jobs(config.jobs, state_dir)
         for job_name, reason in overdue:
-            logger.warning("Job overdue: %s — %s", job_name, reason)
-            dispatch_alert(
-                config.alert,
-                job_name=job_name,
-                event="miss",
-                detail=reason,
-            )
+            logger.warning("Job overdue: %s \u2014 %s", job_name, reason)
+            try:
+                dispatch_alert(
+                    config.alert,
+                    job_name=job_name,
+                    event="miss",
+                    detail=reason,
+                )
+            except Exception:  # noqa: BLE001
+                logger.exception(
+                    "Failed to dispatch alert for job %s; continuing.", job_name
+                )
 
         if once:
             break
