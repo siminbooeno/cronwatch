@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import logging
 from pathlib import Path
 from typing import Optional
 
@@ -12,6 +13,7 @@ from cronwatch.digest import DigestReport
 
 
 _REPORT_TIMESTAMP_FILE = ".last_report"
+_log = logging.getLogger(__name__)
 
 
 def _utcnow() -> datetime.datetime:
@@ -59,8 +61,17 @@ def send_digest_report(
         f"{report.unhealthy_count()} unhealthy"
     )
     body = report.as_text()
-    dispatch_alert(cfg.alert, subject=subject, body=body)
+    try:
+        dispatch_alert(cfg.alert, subject=subject, body=body)
+    except Exception as exc:
+        _log.error("Failed to dispatch digest report: %s", exc)
+        raise
     _write_last_report_time(state_dir, _utcnow())
+    _log.info(
+        "Digest report sent: %d healthy, %d unhealthy",
+        report.healthy_count(),
+        report.unhealthy_count(),
+    )
 
 
 def maybe_send_digest(
