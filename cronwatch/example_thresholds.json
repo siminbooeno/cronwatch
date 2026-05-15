@@ -1,0 +1,35 @@
+{
+  "_comment": "Example showing per-job threshold overrides in a cronwatch config.",
+  "jobs": [
+    {
+      "name": "nightly_backup",
+      "command": "/opt/scripts/backup.sh",
+      "interval_seconds": 86400,
+      "thresholds": {
+        "warn_failure_rate": 0.1,
+        "crit_failure_rate": 0.3,
+        "warn_consecutive": 1,
+        "crit_consecutive": 3
+      }
+    },
+    {
+      "name": "hourly_sync",
+      "command": "/opt/scripts/sync.sh",
+      "interval_seconds": 3600,
+      "thresholds": {
+        "warn_failure_rate": 0.2,
+        "crit_failure_rate": 0.5,
+        "warn_consecutive": 2,
+        "crit_consecutive": 5
+      }
+    },
+    {
+      "name": "weekly_report",
+      "command": "/opt/scripts/report.sh",
+      "interval_seconds": 604800
+    }
+  ],
+  "alert": {
+    "webhook_url": "https://hooks.example.com/cronwatch"
+  }
+}
