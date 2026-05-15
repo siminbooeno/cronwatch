@@ -38,6 +38,26 @@ def config_file(tmp_path):
     return str(p)
 
 
+@pytest.fixture
+def config_file_no_labels(tmp_path):
+    """Config file where jobs have no labels defined."""
+    cfg = {
+        "state_dir": str(tmp_path / "state"),
+        "history_dir": str(tmp_path / "history"),
+        "alert": {},
+        "jobs": [
+            {
+                "name": "nolabeljob",
+                "command": "echo nolabel",
+                "interval_seconds": 3600,
+            },
+        ],
+    }
+    p = tmp_path / "config.json"
+    p.write_text(json.dumps(cfg))
+    return str(p)
+
+
 class _Args:
     def __init__(self, **kw):
         self.__dict__.update(kw)
@@ -74,6 +94,13 @@ def test_cmd_keys(config_file, capsys):
     out = capsys.readouterr().out
     assert "env" in out
     assert "team" in out
+
+
+def test_cmd_keys_no_labels(config_file_no_labels, capsys):
+    """cmd_keys should handle jobs with no labels without crashing."""
+    args = _Args(config=config_file_no_labels)
+    rc = cmd_keys(args)
+    assert rc == 0
 
 
 def test_cmd_values_known_key(config_file, capsys):
