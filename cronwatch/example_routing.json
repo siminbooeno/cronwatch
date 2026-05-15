@@ -1,0 +1,39 @@
+{
+  "routes": [
+    {
+      "match_job": "backup*",
+      "alert": {
+        "webhook_url": "https://hooks.example.com/backup-alerts"
+      }
+    },
+    {
+      "match_tag": "critical",
+      "alert": {
+        "webhook_url": "https://hooks.example.com/critical",
+        "email_to": "oncall@example.com",
+        "email_from": "cronwatch@example.com",
+        "smtp_host": "smtp.example.com",
+        "smtp_port": 587
+      }
+    },
+    {
+      "match_label": "env=prod",
+      "alert": {
+        "webhook_url": "https://hooks.example.com/prod"
+      }
+    },
+    {
+      "match_job": "db_*",
+      "match_tag": "database",
+      "alert": {
+        "email_to": "dba@example.com",
+        "email_from": "cronwatch@example.com",
+        "smtp_host": "smtp.example.com",
+        "smtp_port": 25
+      }
+    }
+  ],
+  "default_alert": {
+    "webhook_url": "https://hooks.example.com/general"
+  }
+}
