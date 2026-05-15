@@ -1,0 +1,40 @@
+{
+  "jobs": [
+    {
+      "name": "billing-sync",
+      "command": "python billing_sync.py",
+      "interval_seconds": 3600,
+      "priority": {
+        "level": "critical",
+        "alert_on_miss": true,
+        "alert_on_failure": true,
+        "min_failures_before_alert": 1
+      }
+    },
+    {
+      "name": "report-generator",
+      "command": "python gen_report.py",
+      "interval_seconds": 86400,
+      "priority": {
+        "level": "high",
+        "alert_on_miss": true,
+        "alert_on_failure": true,
+        "min_failures_before_alert": 2
+      }
+    },
+    {
+      "name": "cache-warmup",
+      "command": "python warm_cache.py",
+      "interval_seconds": 900,
+      "priority": {
+        "level": "low",
+        "alert_on_miss": false,
+        "alert_on_failure": true,
+        "min_failures_before_alert": 5
+      }
+    }
+  ],
+  "alerts": {
+    "webhook_url": "https://hooks.example.com/cronwatch"
+  }
+}
